@@ -1,28 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:tiba_pay/models/user.dart';
 import 'package:tiba_pay/repositories/user_repository.dart';
 import 'package:tiba_pay/utils/database_helper.dart';
 import 'package:tiba_pay/screens/admin/user_edit_screen.dart';
 
 class UserListScreen extends StatefulWidget {
-  const UserListScreen({super.key});
+  final User currentUser;
+
+  const UserListScreen({super.key, required this.currentUser});
 
   @override
   _UserListScreenState createState() => _UserListScreenState();
 }
 
 class _UserListScreenState extends State<UserListScreen> {
-  final _userRepository = UserRepository(dbHelper: DatabaseHelper.instance);
+  final UserRepository _userRepository = UserRepository(dbHelper: DatabaseHelper.instance);
   List<User> _users = [];
   bool _isLoading = true;
   int _rowsPerPage = 10;
-  int _currentPage = 0;
+  int _currentPage = 1;
   final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadUsers();
+    _searchController.addListener(_filterUsers);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUsers() async {
@@ -36,36 +46,70 @@ class _UserListScreenState extends State<UserListScreen> {
     } catch (e) {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading users: ${e.toString()}')),
+        SnackBar(content: Text('Failed to load users: $e')),
       );
     }
   }
 
-  List<User> _getFilteredUsers() {
-    if (_searchController.text.isEmpty) return _users;
-    
+  void _filterUsers() {
     final query = _searchController.text.toLowerCase();
-    return _users.where((user) {
-      return user.username.toLowerCase().contains(query) ||
-             user.firstName.toLowerCase().contains(query) ||
-             user.lastName.toLowerCase().contains(query) ||
-             user.role.toLowerCase().contains(query) ||
-             user.status.toLowerCase().contains(query);
-    }).toList();
+    setState(() {
+      _users = _users.where((user) {
+        return user.username.toLowerCase().contains(query) ||
+               user.firstName.toLowerCase().contains(query) ||
+               user.lastName.toLowerCase().contains(query) ||
+               user.role.toLowerCase().contains(query) ||
+               user.createdBy.toLowerCase().contains(query);
+      }).toList();
+    });
   }
 
-  void _refreshUsers() {
-    _loadUsers();
+  void _deleteUser(int userId) async {
+    try {
+      await _userRepository.deleteUser(userId);
+      _loadUsers();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User deleted successfully')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete user: $e')),
+      );
+    }
+  }
+
+  void _confirmDelete(User user) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm Delete'),
+        content: Text('Are you sure you want to delete ${user.username}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _deleteUser(user.userId!);
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final filteredUsers = _getFilteredUsers();
-    final pageCount = (filteredUsers.length / _rowsPerPage).ceil();
-    final paginatedUsers = filteredUsers
-        .skip(_currentPage * _rowsPerPage)
-        .take(_rowsPerPage)
-        .toList();
+    final totalPages = (_users.length / _rowsPerPage).ceil();
+    final startIndex = (_currentPage - 1) * _rowsPerPage;
+    final endIndex = startIndex + _rowsPerPage;
+    final paginatedUsers = _users.sublist(
+      startIndex.clamp(0, _users.length),
+      endIndex.clamp(0, _users.length),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -73,7 +117,7 @@ class _UserListScreenState extends State<UserListScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _refreshUsers,
+            onPressed: _loadUsers,
           ),
         ],
       ),
@@ -83,144 +127,105 @@ class _UserListScreenState extends State<UserListScreen> {
             padding: const EdgeInsets.all(8.0),
             child: TextField(
               controller: _searchController,
-              decoration: InputDecoration(
-                labelText: 'Search Users',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() {});
-                  },
-                ),
-                border: const OutlineInputBorder(),
+              decoration: const InputDecoration(
+                labelText: 'Search',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
               ),
-              onChanged: (value) => setState(() {
-                _currentPage = 0;
-              }),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Row(
-              children: [
-                const Text('Rows per page:'),
-                const SizedBox(width: 8),
-                DropdownButton<int>(
-                  value: _rowsPerPage,
-                  items: [10, 25, 50, 100].map((value) {
-                    return DropdownMenuItem<int>(
-                      value: value,
-                      child: Text('$value'),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _rowsPerPage = value!;
-                      _currentPage = 0;
-                    });
-                  },
-                ),
-                const Spacer(),
-                Text('${_currentPage * _rowsPerPage + 1}-${(_currentPage + 1) * _rowsPerPage > filteredUsers.length ? filteredUsers.length : (_currentPage + 1) * _rowsPerPage} of ${filteredUsers.length}'),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.chevron_left),
-                  onPressed: _currentPage == 0 ? null : () {
-                    setState(() => _currentPage--);
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: _currentPage >= pageCount - 1 ? null : () {
-                    setState(() => _currentPage++);
-                  },
-                ),
-              ],
             ),
           ),
           Expanded(
             child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.vertical,
-                    child: DataTable(
-                      border: TableBorder.all(
-                        color: Colors.grey,
-                        width: 1.0,
-                        style: BorderStyle.solid,
-                      ),
-                      columns: const [
-                        DataColumn(label: Text('S/N')),
-                        DataColumn(label: Text('Full Name')),
-                        DataColumn(label: Text('Username')),
-                        DataColumn(label: Text('Role')),
-                        DataColumn(label: Text('Status')),
-                        DataColumn(label: Text('Created By')),
-                        DataColumn(label: Text('Created At')),
-                        DataColumn(label: Text('Actions')),
-                      ],
-                      rows: paginatedUsers.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final user = entry.value;
-                        final serialNumber = (_currentPage * _rowsPerPage) + index + 1;
-                        
-                        return DataRow(
-                          cells: [
-                            DataCell(Text(serialNumber.toString())),
-                            DataCell(Text('${user.firstName} ${user.middleName ?? ''} ${user.lastName}'.trim())),
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SingleChildScrollView(
+                      child: DataTable(
+                        columns: const [
+                          DataColumn(label: Text('Username')),
+                          DataColumn(label: Text('Full Name')),
+                          DataColumn(label: Text('Role')),
+                          DataColumn(label: Text('Status')),
+                          DataColumn(label: Text('Created By')),
+                          DataColumn(label: Text('Created At')),
+                          DataColumn(label: Text('Actions')),
+                        ],
+                        rows: paginatedUsers.map((user) {
+                          return DataRow(cells: [
                             DataCell(Text(user.username)),
+                            DataCell(Text(user.fullName)),
                             DataCell(Text(user.role)),
                             DataCell(
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
+                              Chip(
+                                label: Text(
+                                  user.status,
+                                  style: TextStyle(
+                                    color: user.status == 'active' ? Colors.green : Colors.red,
+                                  ),
                                 ),
-                                decoration: BoxDecoration(
-                                  color: user.status == 'Active'
-                                      ? Colors.green.withOpacity(0.2)
-                                      : Colors.red.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(user.status),
+                                backgroundColor: user.status == 'active'
+                                    ? Colors.green.withOpacity(0.1)
+                                    : Colors.red.withOpacity(0.1),
                               ),
                             ),
-                            DataCell(Text(user.createdBy ?? 'System')),
-                            DataCell(Text(user.createdAt)),
-                            DataCell(
-                              IconButton(
-                                icon: const Icon(Icons.edit, size: 20),
-                                onPressed: () {
-                                  Navigator.push(
+                            DataCell(Text(user.createdBy)),
+                            DataCell(Text(DateFormat('yyyy-MM-dd HH:mm').format(DateTime.parse(user.createdAt)))),
+                            DataCell(Row(
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit, color: Colors.blue),
+                                  onPressed: () => Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (context) => UserEditScreen(user: user),
+                                      builder: (ctx) => UserEditScreen(
+                                        user: user,
+                                        currentUser: widget.currentUser,
+                                      ),
                                     ),
-                                  ).then((_) => _refreshUsers());
-                                },
-                              ),
-                            ),
-                          ],
-                        );
-                      }).toList(),
+                                  ).then((_) => _loadUsers()),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.red),
+                                  onPressed: () => _confirmDelete(user),
+                                ),
+                              ],
+                            )),
+                          ]);
+                        }).toList(),
+                      ),
                     ),
                   ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  onPressed: _currentPage > 1
+                      ? () => setState(() => _currentPage--)
+                      : null,
                 ),
+                Text('Page $_currentPage of $totalPages'),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  onPressed: _currentPage < totalPages
+                      ? () => setState(() => _currentPage++)
+                      : null,
+                ),
+              ],
+            ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const UserEditScreen(),
-            ),
-          ).then((_) => _refreshUsers());
-        },
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (ctx) => UserEditScreen(currentUser: widget.currentUser),
+          ),
+        ).then((_) => _loadUsers()),
         child: const Icon(Icons.add),
       ),
     );

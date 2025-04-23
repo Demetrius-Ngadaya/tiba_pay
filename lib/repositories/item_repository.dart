@@ -1,5 +1,6 @@
-import 'package:tiba_pay/models/item.dart';
-import 'package:tiba_pay/utils/database_helper.dart';
+import '../models/item.dart';
+import '../utils/database_helper.dart';
+import 'package:sqflite/sqflite.dart';
 
 class ItemRepository {
   final DatabaseHelper dbHelper;
@@ -8,33 +9,21 @@ class ItemRepository {
 
   Future<List<Item>> getAllItems() async {
     final db = await dbHelper.database;
-    final maps = await db.query('items', orderBy: 'itemName');
+    final List<Map<String, dynamic>> maps = await db.query('items');
     return List.generate(maps.length, (i) => Item.fromMap(maps[i]));
   }
 
   Future<List<Item>> getActiveItems() async {
     final db = await dbHelper.database;
-    final maps = await db.query(
+    final List<Map<String, dynamic>> maps = await db.query(
       'items',
       where: 'isActive = ?',
       whereArgs: [1],
-      orderBy: 'itemName',
     );
     return List.generate(maps.length, (i) => Item.fromMap(maps[i]));
   }
 
-  Future<List<Item>> getItemsByCategory(String category) async {
-    final db = await dbHelper.database;
-    final maps = await db.query(
-      'items',
-      where: 'itemCategory = ? AND isActive = ?',
-      whereArgs: [category, 1],
-      orderBy: 'itemName',
-    );
-    return List.generate(maps.length, (i) => Item.fromMap(maps[i]));
-  }
-
-  Future<void> addItem(Item item) async {
+  Future<void> insertItem(Item item) async {
     final db = await dbHelper.database;
     await db.insert('items', item.toMap());
   }
@@ -56,5 +45,19 @@ class ItemRepository {
       where: 'itemId = ?',
       whereArgs: [itemId],
     );
+  }
+
+  Future<Item?> getItemById(String itemId) async {
+    final db = await dbHelper.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'items',
+      where: 'itemId = ?',
+      whereArgs: [itemId],
+      limit: 1,
+    );
+    if (maps.isNotEmpty) {
+      return Item.fromMap(maps.first);
+    }
+    return null;
   }
 }

@@ -8,8 +8,7 @@ class User {
   final String role;
   final String status;
   final String createdAt;
-
-  var createdBy;
+  final String createdBy; // Added createdBy field
 
   User({
     this.userId,
@@ -21,6 +20,7 @@ class User {
     required this.role,
     required this.status,
     required this.createdAt,
+    required this.createdBy, // Added to constructor
   });
 
   Map<String, dynamic> toMap() {
@@ -34,6 +34,7 @@ class User {
       'role': role,
       'status': status,
       'created_at': createdAt,
+      'created_by': createdBy, // Added to map
     };
   }
 
@@ -48,6 +49,7 @@ class User {
       role: map['role'],
       status: map['status'],
       createdAt: map['created_at'],
+      createdBy: map['created_by'] ?? 'system', // Added with default
     );
   }
 

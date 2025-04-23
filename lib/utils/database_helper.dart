@@ -22,7 +22,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 4, // Updated version for schema changes
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -39,7 +39,8 @@ class DatabaseHelper {
         password_hash TEXT NOT NULL,
         role TEXT NOT NULL CHECK (role IN ('cashier', 'accountant', 'admin')),
         status TEXT NOT NULL CHECK (status IN ('active', 'inactive')),
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        created_by TEXT NOT NULL
       )
     ''');
 
@@ -66,7 +67,8 @@ class DatabaseHelper {
         itemPrice REAL NOT NULL,
         itemSponsor TEXT NOT NULL,
         isActive INTEGER NOT NULL DEFAULT 1,
-        createdAt TEXT NOT NULL
+        createdAt TEXT NOT NULL,
+        createdBy TEXT NOT NULL
       )
     ''');
 
@@ -94,12 +96,17 @@ class DatabaseHelper {
 
     await _createDefaultAdmin(db);
   }
-
-  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await db.execute('ALTER TABLE payments ADD COLUMN createdById INTEGER NOT NULL DEFAULT 0');
       await db.execute('ALTER TABLE payments ADD COLUMN patientName TEXT');
       await db.execute('ALTER TABLE payments ADD COLUMN phoneNumber TEXT');
+    }
+    if (oldVersion < 3) {
+      await db.execute('ALTER TABLE items ADD COLUMN createdBy TEXT NOT NULL DEFAULT "system"');
+    }
+    if (oldVersion < 4) {
+      await db.execute('ALTER TABLE users ADD COLUMN created_by TEXT NOT NULL DEFAULT "system"');
     }
   }
 
@@ -117,6 +124,7 @@ class DatabaseHelper {
         role: 'admin',
         status: 'active',
         createdAt: DateTime.now().toIso8601String(),
+        createdBy: 'system',
       );
       
       await db.insert('users', admin.toMap());

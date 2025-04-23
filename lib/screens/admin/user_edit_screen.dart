@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 import 'dart:convert'; // for utf8
 import 'package:crypto/crypto.dart'; // for sha256
+import 'package:intl/intl.dart';
 
 import 'package:tiba_pay/models/user.dart';
 import 'package:tiba_pay/repositories/user_repository.dart';
 import 'package:tiba_pay/utils/database_helper.dart';
 
-
 class UserEditScreen extends StatefulWidget {
   final User? user;
+  final User currentUser;
 
-  const UserEditScreen({super.key, this.user});
+  const UserEditScreen({
+    super.key, 
+    this.user,
+    required this.currentUser,
+  });
 
   @override
   _UserEditScreenState createState() => _UserEditScreenState();
@@ -72,13 +77,20 @@ class _UserEditScreenState extends State<UserEditScreen> {
       role: _role!,
       status: _status!,
       createdAt: widget.user?.createdAt ?? DateTime.now().toIso8601String(),
+      createdBy: widget.user?.createdBy ?? widget.currentUser.fullName,
     );
 
     try {
       if (widget.user == null) {
         await _userRepository.createUser(user);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User created successfully')),
+        );
       } else {
         await _userRepository.updateUser(user);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User updated successfully')),
+        );
       }
       Navigator.pop(context);
     } catch (e) {
@@ -179,6 +191,12 @@ class _UserEditScreenState extends State<UserEditScreen> {
                 onChanged: (value) => setState(() => _status = value),
                 decoration: const InputDecoration(labelText: 'Status'),
               ),
+              if (widget.user != null) ...[
+                const SizedBox(height: 16),
+                Text('Created By: ${widget.user!.createdBy}'),
+                const SizedBox(height: 8),
+                Text('Created At: ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.parse(widget.user!.createdAt))}'),
+              ],
             ],
           ),
         ),

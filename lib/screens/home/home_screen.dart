@@ -4,11 +4,11 @@ import 'package:tiba_pay/screens/admin/user_list_screen.dart';
 import 'package:tiba_pay/screens/payments/payment_history_screen.dart';
 import 'package:tiba_pay/screens/payments/process_payment_screen.dart';
 import 'package:tiba_pay/screens/patients/patient_list_screen.dart';
-import '../items/item_list_screen.dart';
-import '../reports/item_report_screen.dart';
-import '../reports/patient_report_screen.dart';
-import '../reports/payment_report_screen.dart';
-import '../reports/user_report_screen.dart';
+import 'package:tiba_pay/screens/items/item_list_screen.dart';
+import 'package:tiba_pay/screens/reports/item_report_screen.dart';
+import 'package:tiba_pay/screens/reports/patient_report_screen.dart';
+import 'package:tiba_pay/screens/reports/payment_report_screen.dart';
+import 'package:tiba_pay/screens/reports/user_report_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final User user;
@@ -89,25 +89,25 @@ class HomeScreen extends StatelessWidget {
                 context,
                 icon: Icons.inventory,
                 title: 'Manage Items',
-                onTap: () => _navigateTo(context,  ItemListScreen()),
+                onTap: () => _navigateTo(context, ItemListScreen(currentUser: user)),
               ),
               _buildDrawerItem(
                 context,
                 icon: Icons.people,
                 title: 'User Management',
-                onTap: () => _navigateTo(context, const UserListScreen()),
+                onTap: () => _navigateTo(context, UserListScreen(currentUser: user)),
               ),
             ],
-            if (user.role == 'admin' || user.role == 'cashier')
+            if (user.role == 'admin' || user.role == 'accountant')
               ExpansionTile(
                 leading: const Icon(Icons.assessment),
                 title: const Text('Reports'),
                 children: [
-                  _buildReportItem('Patient Report', () => _navigateTo(context, PatientReportScreen())),
+                  _buildReportItem('Patient Report', () => _navigateTo(context, const PatientReportScreen())),
                   _buildReportItem('Payment Report', () => _navigateTo(context, PaymentReportScreen(user: user))),
                   if (user.role == 'admin') ...[
-                    _buildReportItem('Item Report', () => _navigateTo(context, ItemReportScreen())),
-                    _buildReportItem('User Report', () => _navigateTo(context, UserReportScreen())),
+                    _buildReportItem('Item Report', () => _navigateTo(context, const ItemReportScreen())),
+                    _buildReportItem('User Report', () => _navigateTo(context, const UserReportScreen())),
                   ],
                 ],
               ),
@@ -149,7 +149,7 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
       ),
-      floatingActionButton: user.role == 'cashier' || user.role == 'admin'
+      floatingActionButton: user.role == 'cashier' || user.role == 'accountant' || user.role == 'admin'
           ? FloatingActionButton(
               onPressed: () => _navigateTo(context, ProcessPaymentScreen(user: user)),
               tooltip: 'New Payment',
@@ -175,9 +175,12 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildReportItem(String title, VoidCallback onTap) {
-    return ListTile(
-      title: Text(title),
-      onTap: onTap,
+    return Padding(
+      padding: const EdgeInsets.only(left: 16.0),
+      child: ListTile(
+        title: Text(title),
+        onTap: onTap,
+      ),
     );
   }
 
@@ -189,7 +192,12 @@ class HomeScreen extends StatelessWidget {
         ActionChip(
           avatar: const Icon(Icons.people, size: 18),
           label: const Text('Manage Users'),
-          onPressed: () => _navigateTo(context, const UserListScreen()),
+          onPressed: () => _navigateTo(context,  UserListScreen(currentUser: user)),
+        ),
+        ActionChip(
+          avatar: const Icon(Icons.inventory, size: 18),
+          label: const Text('Manage Items'),
+          onPressed: () => _navigateTo(context, ItemListScreen(currentUser: user)),
         ),
         ActionChip(
           avatar: const Icon(Icons.settings, size: 18),

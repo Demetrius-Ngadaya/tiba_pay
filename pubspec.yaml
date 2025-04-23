@@ -40,6 +40,7 @@ dependencies:
   intl: ^0.18.1  # for date formatting
   json_annotation: ^4.0.1
   printing: ^5.9.1
+  uuid: ^3.0.7
   pdf: ^3.10.0
   excel: ^2.0.1
   path_provider: ^2.1.1

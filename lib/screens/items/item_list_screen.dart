@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:tiba_pay/models/item.dart';
+import 'package:tiba_pay/models/user.dart';
 import 'package:tiba_pay/utils/database_helper.dart';
 import 'package:tiba_pay/screens/items/item_edit_screen.dart';
 import 'package:tiba_pay/repositories/item_repository.dart';
 
 class ItemListScreen extends StatefulWidget {
+  final User currentUser;
+
+  const ItemListScreen({Key? key, required this.currentUser}) : super(key: key);
+
   @override
   _ItemListScreenState createState() => _ItemListScreenState();
 }
@@ -23,7 +28,10 @@ class _ItemListScreenState extends State<ItemListScreen> {
   String? _sponsorFilter;
   bool? _activeFilter = true;
 
-  final List<String> _categories = ['Medicine', 'Equipment', 'Service', 'Other'];
+  final List<String> _categories = ['DENTAL', 'OPTHAMOLOGY', 'ABS AND GYN', 'OPD', 'EMD', 'RADIOLOGY', 
+                                        'PSYCHIATRIC', 'INTERNAL MEDICINE', 'ORTHOPEDIC', 'DIALYSIS', 
+                                        'SURGICAL', 'ENT', 'DERMATOLOGY', 'PHYSIOTHERAPY', 'MALNUTRITION', 
+                                        'COMMUNITY PHARMACY', 'IPD PHARMACY', 'EMD PHARMACY', 'MORTUARY', 'OTHER'];
   final List<String> _sponsors = ['CASH REFERRAL', 'CASH SELF REFERRAL', 'FIRST TRUCK'];
 
   @override
@@ -62,7 +70,8 @@ class _ItemListScreenState extends State<ItemListScreen> {
       _filteredItems = _items.where((item) {
         final matchesSearch = item.itemName.toLowerCase().contains(query) ||
             item.itemCategory.toLowerCase().contains(query) ||
-            item.itemSponsor.toLowerCase().contains(query);
+            item.itemSponsor.toLowerCase().contains(query) ||
+            item.createdBy.toLowerCase().contains(query);
         
         final matchesCategory = _categoryFilter == null || 
             item.itemCategory == _categoryFilter;
@@ -83,7 +92,7 @@ class _ItemListScreenState extends State<ItemListScreen> {
       await _itemRepository.deleteItem(itemId);
       _loadItems();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Item deleted successfully')),
+        const SnackBar(content: Text('Item deleted successfully')),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -96,19 +105,19 @@ class _ItemListScreenState extends State<ItemListScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Confirm Delete'),
+        title: const Text('Confirm Delete'),
         content: Text('Are you sure you want to delete ${item.itemName}?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel'),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
               _deleteItem(item.itemId);
             },
-            child: Text('Delete', style: TextStyle(color: Colors.red)),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -127,10 +136,10 @@ class _ItemListScreenState extends State<ItemListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Manage Items'),
+        title: const Text('Manage Items'),
         actions: [
           IconButton(
-            icon: Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh),
             onPressed: _loadItems,
           ),
         ],
@@ -145,7 +154,7 @@ class _ItemListScreenState extends State<ItemListScreen> {
                 Expanded(
                   child: TextField(
                     controller: _searchController,
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       labelText: 'Search',
                       prefixIcon: Icon(Icons.search),
                       border: OutlineInputBorder(),
@@ -153,7 +162,7 @@ class _ItemListScreenState extends State<ItemListScreen> {
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.filter_alt),
+                  icon: const Icon(Icons.filter_alt),
                   onPressed: () => _showFilterDialog(),
                 ),
               ],
@@ -165,16 +174,16 @@ class _ItemListScreenState extends State<ItemListScreen> {
             child: Row(
               children: [
                 ElevatedButton.icon(
-                  icon: Icon(Icons.add),
-                  label: Text('Add Item'),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Item'),
                   onPressed: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (ctx) => ItemEditScreen(),
+                      builder: (ctx) => ItemEditScreen(currentUser: widget.currentUser),
                     ),
                   ).then((_) => _loadItems()),
                 ),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 DropdownButton<int>(
                   value: _rowsPerPage,
                   items: [10, 25, 50, 100]
@@ -196,7 +205,7 @@ class _ItemListScreenState extends State<ItemListScreen> {
           // Items Table
           Expanded(
             child: _isLoading
-                ? Center(child: CircularProgressIndicator())
+                ? const Center(child: CircularProgressIndicator())
                 : SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: SingleChildScrollView(
@@ -206,6 +215,7 @@ class _ItemListScreenState extends State<ItemListScreen> {
                           DataColumn(label: Text('Department')),
                           DataColumn(label: Text('Price'), numeric: true),
                           DataColumn(label: Text('Sponsor')),
+                          DataColumn(label: Text('Created By')),
                           DataColumn(label: Text('Status')),
                           DataColumn(label: Text('Actions')),
                         ],
@@ -215,6 +225,7 @@ class _ItemListScreenState extends State<ItemListScreen> {
                             DataCell(Text(item.itemCategory)),
                             DataCell(Text('${item.itemPrice.toStringAsFixed(2)}')),
                             DataCell(Text(item.itemSponsor)),
+                            DataCell(Text(item.createdBy)),
                             DataCell(
                               Chip(
                                 label: Text(
@@ -231,16 +242,19 @@ class _ItemListScreenState extends State<ItemListScreen> {
                             DataCell(Row(
                               children: [
                                 IconButton(
-                                  icon: Icon(Icons.edit, color: Colors.blue),
+                                  icon: const Icon(Icons.edit, color: Colors.blue),
                                   onPressed: () => Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (ctx) => ItemEditScreen(item: item),
+                                      builder: (ctx) => ItemEditScreen(
+                                        item: item,
+                                        currentUser: widget.currentUser,
+                                      ),
                                     ),
                                   ).then((_) => _loadItems()),
                                 ),
                                 IconButton(
-                                  icon: Icon(Icons.delete, color: Colors.red),
+                                  icon: const Icon(Icons.delete, color: Colors.red),
                                   onPressed: () => _confirmDelete(item),
                                 ),
                               ],
@@ -258,14 +272,14 @@ class _ItemListScreenState extends State<ItemListScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 IconButton(
-                  icon: Icon(Icons.chevron_left),
+                  icon: const Icon(Icons.chevron_left),
                   onPressed: _currentPage > 1
                       ? () => setState(() => _currentPage--)
                       : null,
                 ),
                 Text('Page $_currentPage of $totalPages'),
                 IconButton(
-                  icon: Icon(Icons.chevron_right),
+                  icon: const Icon(Icons.chevron_right),
                   onPressed: _currentPage < totalPages
                       ? () => setState(() => _currentPage++)
                       : null,
@@ -282,13 +296,13 @@ class _ItemListScreenState extends State<ItemListScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Filter Items'),
+        title: const Text('Filter Items'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             DropdownButtonFormField<String>(
               value: _categoryFilter,
-              decoration: InputDecoration(labelText: 'Category'),
+              decoration: const InputDecoration(labelText: 'Category'),
               items: [null, ..._categories]
                   .map((category) => DropdownMenuItem(
                         value: category,
@@ -302,7 +316,7 @@ class _ItemListScreenState extends State<ItemListScreen> {
             ),
             DropdownButtonFormField<String>(
               value: _sponsorFilter,
-              decoration: InputDecoration(labelText: 'Sponsor'),
+              decoration: const InputDecoration(labelText: 'Sponsor'),
               items: [null, ..._sponsors]
                   .map((sponsor) => DropdownMenuItem(
                         value: sponsor,
@@ -316,11 +330,11 @@ class _ItemListScreenState extends State<ItemListScreen> {
             ),
             DropdownButtonFormField<bool>(
               value: _activeFilter,
-              decoration: InputDecoration(labelText: 'Status'),
+              decoration: const InputDecoration(labelText: 'Status'),
               items: [
-                DropdownMenuItem(value: null, child: Text('All Statuses')),
-                DropdownMenuItem(value: true, child: Text('Active')),
-                DropdownMenuItem(value: false, child: Text('Inactive')),
+                const DropdownMenuItem(value: null, child: Text('All Statuses')),
+                const DropdownMenuItem(value: true, child: Text('Active')),
+                const DropdownMenuItem(value: false, child: Text('Inactive')),
               ],
               onChanged: (value) {
                 setState(() => _activeFilter = value);
@@ -340,11 +354,11 @@ class _ItemListScreenState extends State<ItemListScreen> {
               _filterItems();
               Navigator.pop(ctx);
             },
-            child: Text('Reset'),
+            child: const Text('Reset'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Close'),
+            child: const Text('Close'),
           ),
         ],
       ),
