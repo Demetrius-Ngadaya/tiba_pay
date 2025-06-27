@@ -6,8 +6,7 @@ class PaymentItem {
   final String itemCategory;
   final double amount;
   int quantity;
-
-  var department;
+  final String? department;
 
   PaymentItem({
     required this.itemId,
@@ -15,22 +14,20 @@ class PaymentItem {
     required this.itemCategory,
     required this.amount,
     this.quantity = 1,
+    this.department,
   });
 
-  PaymentItem copyWith({
-    String? itemId,
-    String? itemName,
-    String? itemCategory,
-    double? amount,
-    int? quantity,
-  }) {
-    return PaymentItem(
-      itemId: itemId ?? this.itemId,
-      itemName: itemName ?? this.itemName,
-      itemCategory: itemCategory ?? this.itemCategory,
-      amount: amount ?? this.amount,
-      quantity: quantity ?? this.quantity,
-    );
+  // For API communication
+  Map<String, dynamic> toApiMap() {
+    return {
+      'item_id': itemId,
+      'item_name': itemName,
+      'item_category': itemCategory,
+      'amount': amount,
+      'quantity': quantity,
+      'department': department,
+      'total': total,
+    };
   }
 
   Map<String, dynamic> toMap() {
@@ -40,7 +37,26 @@ class PaymentItem {
       'itemCategory': itemCategory,
       'amount': amount,
       'quantity': quantity,
+      'department': department,
     };
+  }
+
+  PaymentItem copyWith({
+    String? itemId,
+    String? itemName,
+    String? itemCategory,
+    double? amount,
+    int? quantity,
+    String? department,
+  }) {
+    return PaymentItem(
+      itemId: itemId ?? this.itemId,
+      itemName: itemName ?? this.itemName,
+      itemCategory: itemCategory ?? this.itemCategory,
+      amount: amount ?? this.amount,
+      quantity: quantity ?? this.quantity,
+      department: department ?? this.department,
+    );
   }
 
   double get total => amount * quantity;
@@ -80,12 +96,26 @@ class Payment {
     this.phoneNumber,
   });
 
-  double get totalAmount => item.amount * item.quantity;
+  // For API communication
+  Map<String, dynamic> toApiMap() {
+    return {
+      'payment_id': paymentId,
+      'payment_date': paymentDate.toIso8601String(),
+      'patient_id': patientId,
+      'created_by': createdBy,
+      'created_by_id': createdById,
+      'sponsor': sponsor,
+      'item': item.toApiMap(),
+      'department': department,
+      'status': status ?? 'completed',
+      'patient_name': patientName,
+      'phone_number': phoneNumber,
+      'total_amount': totalAmount,
+      'receipt_number': receiptNumber,
+    };
+  }
 
-  String get formattedDate => DateFormat('yyyy-MM-dd HH:mm').format(paymentDate);
-
-  String get receiptNumber => 'REC-${paymentId.substring(0, 8).toUpperCase()}';
-
+  // For local database storage
   Map<String, dynamic> toMap() {
     return {
       'paymentId': paymentId,
@@ -100,7 +130,7 @@ class Payment {
       'amount': item.amount,
       'quantity': item.quantity,
       'isSynced': isSynced ? 1 : 0,
-      'department': department,
+      'department': department ?? item.department,
       'status': status,
       'patientName': patientName,
       'phoneNumber': phoneNumber,
@@ -121,6 +151,7 @@ class Payment {
         itemCategory: map['itemCategory'] ?? '',
         amount: (map['amount'] is int ? (map['amount'] as int).toDouble() : map['amount']) ?? 0.0,
         quantity: map['quantity'] ?? 1,
+        department: map['department'],
       ),
       isSynced: map['isSynced'] == 1,
       department: map['department'],
@@ -129,6 +160,42 @@ class Payment {
       phoneNumber: map['phoneNumber'],
     );
   }
+
+  Payment copyWith({
+    String? paymentId,
+    DateTime? paymentDate,
+    String? patientId,
+    String? createdBy,
+    int? createdById,
+    String? sponsor,
+    PaymentItem? item,
+    bool? isSynced,
+    String? department,
+    String? status,
+    String? patientName,
+    String? phoneNumber,
+  }) {
+    return Payment(
+      paymentId: paymentId ?? this.paymentId,
+      paymentDate: paymentDate ?? this.paymentDate,
+      patientId: patientId ?? this.patientId,
+      createdBy: createdBy ?? this.createdBy,
+      createdById: createdById ?? this.createdById,
+      sponsor: sponsor ?? this.sponsor,
+      item: item ?? this.item,
+      isSynced: isSynced ?? this.isSynced,
+      department: department ?? this.department,
+      status: status ?? this.status,
+      patientName: patientName ?? this.patientName,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
+    );
+  }
+
+  double get totalAmount => item.total;
+  
+  String get formattedDate => DateFormat('yyyy-MM-dd HH:mm').format(paymentDate);
+  
+  String get receiptNumber => 'REC-${paymentId.substring(0, 8).toUpperCase()}';
 
   @override
   String toString() {

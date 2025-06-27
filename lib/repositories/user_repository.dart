@@ -10,7 +10,7 @@ class UserRepository {
     final db = await dbHelper.database;
     return await db.insert('users', user.toMap());
   }
-
+  
   Future<User?> getUser(int id) async {
     final db = await dbHelper.database;
     final maps = await db.query(

@@ -38,15 +38,142 @@ class PatientRepository {
       address: patient.address,
       createdAt: patient.createdAt,
       createdBy: patient.createdBy,
+      isSynced: patient.isSynced,  
     );
 
     return await db.insert('patients', patientWithNumber.toMap());
   }
 
-  Future<List<Patient>> getAllPatients() async {
+  Future<List<Patient>> getAllPatients({
+    int? limit,
+    int? offset,
+    String? searchQuery,
+    String? patientNumber,
+    String? patientName,
+    String? sponsor,
+    int? createdBy,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
     final db = await dbHelper.database;
-    final maps = await db.query('patients', orderBy: 'patient_id DESC');
+    
+    // Build where clause based on filters
+    var where = '1 = 1';
+    final whereArgs = <dynamic>[];
+
+    if (searchQuery != null && searchQuery.isNotEmpty) {
+      where += '''
+        AND (patientNumber LIKE ? 
+        OR firstName LIKE ? 
+        OR lastName LIKE ? 
+        OR sponsor LIKE ? 
+        OR phoneNumber LIKE ?)
+      ''';
+      final searchTerm = '%$searchQuery%';
+      whereArgs.addAll([searchTerm, searchTerm, searchTerm, searchTerm, searchTerm]);
+    }
+
+    if (patientNumber != null && patientNumber.isNotEmpty) {
+      where += ' AND patientNumber LIKE ?';
+      whereArgs.add('%$patientNumber%');
+    }
+
+    if (patientName != null && patientName.isNotEmpty) {
+      where += ' AND (firstName LIKE ? OR lastName LIKE ?)';
+      whereArgs.addAll(['%$patientName%', '%$patientName%']);
+    }
+
+    if (sponsor != null && sponsor.isNotEmpty) {
+      where += ' AND sponsor LIKE ?';
+      whereArgs.add('%$sponsor%');
+    }
+
+    if (createdBy != null) {
+      where += ' AND createdBy = ?';
+      whereArgs.add(createdBy);
+    }
+
+    if (startDate != null) {
+      where += ' AND createdAt >= ?';
+      whereArgs.add(startDate.millisecondsSinceEpoch);
+    }
+
+    if (endDate != null) {
+      where += ' AND createdAt <= ?';
+      whereArgs.add(endDate.add(const Duration(days: 1)).millisecondsSinceEpoch);
+    }
+
+    final maps = await db.query(
+      'patients',
+      where: where,
+      whereArgs: whereArgs,
+      limit: limit,
+      offset: offset,
+      orderBy: 'patient_id DESC',
+    );
+    
     return List.generate(maps.length, (i) => Patient.fromMap(maps[i]));
+  }
+
+  Future<int> getPatientsCount({
+    String? searchQuery,
+    String? patientNumber,
+    String? patientName,
+    String? sponsor,
+    int? createdBy,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    final db = await dbHelper.database;
+    
+    // Build where clause based on filters
+    var where = '1 = 1';
+    final whereArgs = <dynamic>[];
+
+    if (searchQuery != null && searchQuery.isNotEmpty) {
+      where += '''
+        AND (patientNumber LIKE ? 
+        OR firstName LIKE ? 
+        OR lastName LIKE ? 
+        OR sponsor LIKE ? 
+        OR phoneNumber LIKE ?)
+      ''';
+      final searchTerm = '%$searchQuery%';
+      whereArgs.addAll([searchTerm, searchTerm, searchTerm, searchTerm, searchTerm]);
+    }
+
+    if (patientNumber != null && patientNumber.isNotEmpty) {
+      where += ' AND patientNumber LIKE ?';
+      whereArgs.add('%$patientNumber%');
+    }
+
+    if (patientName != null && patientName.isNotEmpty) {
+      where += ' AND (firstName LIKE ? OR lastName LIKE ?)';
+      whereArgs.addAll(['%$patientName%', '%$patientName%']);
+    }
+
+    if (sponsor != null && sponsor.isNotEmpty) {
+      where += ' AND sponsor LIKE ?';
+      whereArgs.add('%$sponsor%');
+    }
+
+    if (createdBy != null) {
+      where += ' AND createdBy = ?';
+      whereArgs.add(createdBy);
+    }
+
+    if (startDate != null) {
+      where += ' AND createdAt >= ?';
+      whereArgs.add(startDate.millisecondsSinceEpoch);
+    }
+
+    if (endDate != null) {
+      where += ' AND createdAt <= ?';
+      whereArgs.add(endDate.add(const Duration(days: 1)).millisecondsSinceEpoch);
+    }
+
+    final count = await db.rawQuery('SELECT COUNT(*) FROM patients WHERE $where', whereArgs);
+    return Sqflite.firstIntValue(count) ?? 0;
   }
 
   Future<int> updatePatient(Patient patient) async {
@@ -66,15 +193,5 @@ class PatientRepository {
       where: 'patientNumber = ?',
       whereArgs: [patientNumber],
     );
-  }
-
-  Future<List<Patient>> searchPatients(String query) async {
-    final db = await dbHelper.database;
-    final maps = await db.query(
-      'patients',
-      where: 'firstName LIKE ? OR lastName LIKE ? OR patientNumber LIKE ?',
-      whereArgs: ['%$query%', '%$query%', '%$query%'],
-    );
-    return List.generate(maps.length, (i) => Patient.fromMap(maps[i]));
   }
 }

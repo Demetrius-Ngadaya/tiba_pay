@@ -9,6 +9,7 @@ class User {
   final String status;
   final String createdAt;
   final String createdBy; // Added createdBy field
+  final String authToken; // Add this field
 
   User({
     this.userId,
@@ -21,6 +22,7 @@ class User {
     required this.status,
     required this.createdAt,
     required this.createdBy, // Added to constructor
+    this.authToken = '',// Make optional with default empty string
   });
 
   Map<String, dynamic> toMap() {
@@ -50,6 +52,7 @@ class User {
       status: map['status'],
       createdAt: map['created_at'],
       createdBy: map['created_by'] ?? 'system', // Added with default
+      authToken: map['auth_token'] ?? '', // Add this line
     );
   }
 

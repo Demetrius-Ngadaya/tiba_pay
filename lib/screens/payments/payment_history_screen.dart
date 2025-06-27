@@ -6,6 +6,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:tiba_pay/models/payment.dart';
 import 'package:tiba_pay/repositories/payment_repository.dart';
 import 'package:tiba_pay/utils/database_helper.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:pdf/widgets.dart' as pw;
 
 class PaymentHistoryScreen extends StatefulWidget {
   final bool showAll;
@@ -148,45 +150,168 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
   Future<void> _refreshPayments() async {
     await _loadInitialPayments();
   }
+   Future<void> _printReceipt(Payment payment) async {
+  try {
+    final pdf = pw.Document();
 
-  Future<void> _printReceipt(Payment payment) async {
-    try {
-      final pdf = pw.Document();
+    // Load your logo images
+    final leftLogo = pw.MemoryImage(
+      (await rootBundle.load('assets/icons/gvt_logo.jpg')).buffer.asUint8List(),
+    );
+    final rightLogo = pw.MemoryImage(
+      (await rootBundle.load('assets/icons/hospital_logo.png')).buffer.asUint8List(),
+    );
 
-      pdf.addPage(
-        pw.Page(
-          pageFormat: PdfPageFormat.a4,
-          build: (pw.Context context) {
-            return pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Header(level: 0, child: pw.Text('Payment Receipt')),
-                pw.SizedBox(height: 20),
-                pw.Text('Receipt Number: ${payment.receiptNumber}'),
-                pw.Text('Date: ${payment.formattedDate}'),
-                pw.Text('Patient: ${payment.patientName ?? 'Unknown'}'),
-                pw.Text('Patient ID: ${payment.patientId}'),
-                pw.SizedBox(height: 20),
-                pw.Text('Item:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                pw.Text('${payment.item.itemName} x${payment.item.quantity} - ${_currencyFormat.format(payment.item.amount)}'),
-                pw.Divider(),
-                pw.Text('Total Amount: ${_currencyFormat.format(payment.totalAmount)}',
-                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-              ],
-            );
-          },
-        ),
-      );
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.roll80,
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // Logos
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Container(
+                    height: 60,
+                    child: pw.Image(leftLogo, height: 60),
+                  ),
+                  pw.Container(
+                    height: 60,
+                    child: pw.Image(rightLogo, height: 60),
+                  ),
+                ],
+              ),
 
-      await Printing.layoutPdf(
-        onLayout: (PdfPageFormat format) async => pdf.save(),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to generate receipt: ${e.toString()}')),
-      );
-    }
+              pw.SizedBox(height: 5),
+
+              // Header text
+              pw.Center(
+                child: pw.Column(
+                  children: [
+                    pw.Text(
+                      'MOROGORO REGIONAL REFERRAL HOSPITAL',
+                      style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                    pw.Text('P.O BOX 110 MOROGORO TANZANIA', style: pw.TextStyle(fontSize: 10)),
+                    pw.Text('Email: barua@morogororrh.go.tz', style: pw.TextStyle(fontSize: 10)),
+                    pw.Text('Tel: +255 737 977 828', style: pw.TextStyle(fontSize: 10)),
+                  ],
+                ),
+              ),
+
+              pw.Divider(thickness: 1),
+              pw.SizedBox(height: 10),
+
+              // Title
+              pw.Center(
+                child: pw.Text(
+                  'PAYMENT RECEIPT',
+                  style: pw.TextStyle(
+                    fontSize: 14,
+                    fontWeight: pw.FontWeight.bold,
+                    decoration: pw.TextDecoration.underline,
+                  ),
+                ),
+              ),
+
+              pw.SizedBox(height: 15),
+
+              // Receipt Fields
+              buildRow('Receipt Number:', payment.receiptNumber),
+              pw.SizedBox(height: 8),
+              buildRow('Date:', payment.formattedDate),
+              pw.SizedBox(height: 8),
+              buildRow('Patient Name:', payment.patientName ?? 'Unknown'),
+              pw.SizedBox(height: 8),
+              buildRow('Patient ID:', payment.patientId),
+              pw.SizedBox(height: 8),
+              buildRow('Cashier Name:', payment.createdBy.toString()),
+
+              pw.SizedBox(height: 15),
+              pw.Divider(thickness: 0.5),
+              pw.SizedBox(height: 10),
+
+              // Item Details
+              pw.Text('Item Details:', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 8),
+              buildRow('Item:', payment.item.itemName),
+              pw.SizedBox(height: 8),
+              buildRow('Quantity:', '${payment.item.quantity}'),
+              pw.SizedBox(height: 8),
+              buildRow('Unit Price:', _currencyFormat.format(payment.item.amount / payment.item.quantity)),
+
+              pw.SizedBox(height: 15),
+              pw.Divider(thickness: 1),
+              pw.SizedBox(height: 10),
+
+              // Total
+              pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Container(
+                    width: 100,
+                    child: pw.Text('TOTAL AMOUNT:', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                  ),
+                  pw.Expanded(
+                    child: pw.Text(
+                      _currencyFormat.format(payment.totalAmount),
+                      style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+
+              pw.SizedBox(height: 20),
+
+              // Footer
+              pw.Center(
+                child: pw.Text(
+                  'Huduma Bora Kipaumbele Chetu!',
+                  style: pw.TextStyle(fontSize: 12, fontStyle: pw.FontStyle.italic),
+                ),
+              ),
+              pw.SizedBox(height: 10),
+              pw.Center(
+                child: pw.Text(
+                  'Asante sana kwa kuja kuhudumiwa kwetu, karibu tena.',
+                  style: pw.TextStyle(fontSize: 10),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+    );
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to generate receipt: ${e.toString()}')),
+    );
   }
+}
+
+// Helper method for consistent label/value layout
+pw.Widget buildRow(String label, String value) {
+  return pw.Row(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+      pw.Container(
+        width: 100,
+        child: pw.Text(label, style: pw.TextStyle(fontSize: 12)),
+      ),
+      pw.Expanded(
+        child: pw.Text(value, style: pw.TextStyle(fontSize: 12), softWrap: true),
+      ),
+    ],
+  );
+}
+
 
   Widget _buildEmptyState() {
     return Center(
@@ -342,10 +467,10 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                                       value: null,
                                       child: Text('All Departments'),
                                     ),
-                                    ...['DENTAL', 'OPTHAMOLOGY', 'ABS AND GYN', 'OPD', 'EMD', 'RADIOLOGY', 
-                                        'PSYCHIATRIC', 'INTERNAL MEDICINE', 'ORTHOPEDIC', 'DIALYSIS', 
-                                        'SURGICAL', 'ENT', 'DERMATOLOGY', 'PHYSIOTHERAPY', 'MALNUTRITION', 
-                                        'COMMUNITY PHARMACY', 'IPD PHARMACY', 'EMD PHARMACY', 'MORTUARY', 'OTHER']
+                                    ... ['DENTAL', 'OPTHAMOLOGY', 'ABS AND GYN', 'OPD', 'EMD', 'RADIOLOGY', 'PROCEDURAL',
+                                   'PSYCHIATRIC', 'OPD', 'INTERNAL MEDICINE', 'ORTHOPEDIC', 'DIALYSIS', 'LABORATORY', 
+                                   'SURGICAL', 'ENT', 'DERMATOLOGY', 'PHARMACY', 'PHYSIOTHERAPY', 'MALNUTRITION', 
+                                   'CONSULTATION', 'EYE', 'LAUNDRY', 'MORTUARY', 'TAILORING', 'OTHER']
                                         .map((category) {
                                       return DropdownMenuItem<String>(
                                         value: category,
@@ -435,10 +560,10 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                                 value: null,
                                 child: Text('All Departments'),
                               ),
-                              ...['DENTAL', 'OPTHAMOLOGY', 'ABS AND GYN', 'OPD', 'EMD', 'RADIOLOGY', 
-                                  'PSYCHIATRIC', 'INTERNAL MEDICINE', 'ORTHOPEDIC', 'DIALYSIS', 
-                                  'SURGICAL', 'ENT', 'DERMATOLOGY', 'PHYSIOTHERAPY', 'MALNUTRITION', 
-                                  'COMMUNITY PHARMACY', 'IPD PHARMACY', 'EMD PHARMACY', 'MORTUARY', 'OTHER']
+                              ... ['DENTAL', 'OPTHAMOLOGY', 'ABS AND GYN', 'OPD', 'EMD', 'RADIOLOGY', 'PROCEDURAL',
+                                   'PSYCHIATRIC', 'OPD', 'INTERNAL MEDICINE', 'ORTHOPEDIC', 'DIALYSIS', 'LABORATORY', 
+                                   'SURGICAL', 'ENT', 'DERMATOLOGY', 'PHARMACY', 'PHYSIOTHERAPY', 'MALNUTRITION', 
+                                   'CONSULTATION', 'EYE', 'LAUNDRY', 'MORTUARY', 'TAILORING', 'OTHER']
                                   .map((category) {
                                 return DropdownMenuItem<String>(
                                   value: category,

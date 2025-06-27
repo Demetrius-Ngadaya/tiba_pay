@@ -55,7 +55,8 @@ class DatabaseHelper {
         phoneNumber TEXT,
         address TEXT,
         created_at TEXT NOT NULL,
-        created_by TEXT
+        created_by TEXT,
+        isSynced INTEGER DEFAULT 0 
       )
     ''');
 
@@ -93,22 +94,38 @@ class DatabaseHelper {
         FOREIGN KEY (createdById) REFERENCES users (user_id)
       )
     ''');
+    // sync_logs table
+await db.execute('''
+  CREATE TABLE sync_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sync_time TEXT NOT NULL,
+    records_synced INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    error TEXT,
+    device_info TEXT,
+    app_version TEXT
+  )
+''');
 
     await _createDefaultAdmin(db);
   }
  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
-      await db.execute('ALTER TABLE payments ADD COLUMN createdById INTEGER NOT NULL DEFAULT 0');
-      await db.execute('ALTER TABLE payments ADD COLUMN patientName TEXT');
-      await db.execute('ALTER TABLE payments ADD COLUMN phoneNumber TEXT');
-    }
-    if (oldVersion < 3) {
-      await db.execute('ALTER TABLE items ADD COLUMN createdBy TEXT NOT NULL DEFAULT "system"');
-    }
-    if (oldVersion < 4) {
-      await db.execute('ALTER TABLE users ADD COLUMN created_by TEXT NOT NULL DEFAULT "system"');
-    }
+  if (oldVersion < 2) {
+    await db.execute('ALTER TABLE payments ADD COLUMN createdById INTEGER NOT NULL DEFAULT 0');
+    await db.execute('ALTER TABLE payments ADD COLUMN patientName TEXT');
+    await db.execute('ALTER TABLE payments ADD COLUMN phoneNumber TEXT');
   }
+  if (oldVersion < 3) {
+    await db.execute('ALTER TABLE items ADD COLUMN createdBy TEXT NOT NULL DEFAULT "system"');
+  }
+  if (oldVersion < 4) {
+    await db.execute('ALTER TABLE users ADD COLUMN created_by TEXT NOT NULL DEFAULT "system"');
+    await db.execute('ALTER TABLE users ADD COLUMN auth_token TEXT');
+  }
+  if (oldVersion < 5) {
+    await db.execute('ALTER TABLE patients ADD COLUMN isSynced INTEGER DEFAULT 0');
+  }
+}
 
   Future<void> _createDefaultAdmin(Database db) async {
     final count = Sqflite.firstIntValue(
@@ -124,7 +141,7 @@ class DatabaseHelper {
         role: 'admin',
         status: 'active',
         createdAt: DateTime.now().toIso8601String(),
-        createdBy: 'system',
+        createdBy: 'system', authToken: '',
       );
       
       await db.insert('users', admin.toMap());

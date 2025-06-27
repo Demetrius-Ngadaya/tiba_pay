@@ -29,7 +29,7 @@ class _PatientEditScreenState extends State<PatientEditScreen> {
   final _patientRepository = PatientRepository(dbHelper: DatabaseHelper.instance);
   
   String? _selectedSponsor;
-  final List<String> _sponsors = ['CASH REFERRAL', 'CASH SELF REFERRAL', 'FIRST TRUCK'];
+  final List<String> _sponsors = ['CASH REFERRAL', 'CASH SELF REFERRAL', 'FAST TRACK'];
 
   @override
   void initState() {

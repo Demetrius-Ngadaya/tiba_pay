@@ -31,11 +31,11 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
   late bool _isActive;
   late String _createdBy;
 
-  final List<String> _categories = ['DENTAL', 'OPTHAMOLOGY', 'ABS AND GYN', 'OPD', 'EMD', 'RADIOLOGY', 
-                                        'PSYCHIATRIC', 'INTERNAL MEDICINE', 'ORTHOPEDIC', 'DIALYSIS', 
-                                        'SURGICAL', 'ENT', 'DERMATOLOGY', 'PHYSIOTHERAPY', 'MALNUTRITION', 
-                                        'COMMUNITY PHARMACY', 'IPD PHARMACY', 'EMD PHARMACY', 'MORTUARY', 'OTHER'];
-  final List<String> _sponsors = ['CASH REFERRAL', 'CASH SELF REFERRAL', 'FIRST TRUCK'];
+  final List<String> _categories =  ['DENTAL', 'OPTHAMOLOGY', 'ABS AND GYN', 'OPD', 'EMD', 'RADIOLOGY', 'PROCEDURAL',
+                                   'PSYCHIATRIC', 'OPD', 'INTERNAL MEDICINE', 'ORTHOPEDIC', 'DIALYSIS', 'LABORATORY', 
+                                   'SURGICAL', 'ENT', 'DERMATOLOGY', 'PHARMACY', 'PHYSIOTHERAPY', 'MALNUTRITION', 
+                                   'CONSULTATION', 'EYE', 'LAUNDRY', 'MORTUARY', 'TAILORING', 'OTHER'];
+  final List<String> _sponsors = ['CASH REFERRAL', 'CASH SELF REFERRAL', 'FAST TRACK'];
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();

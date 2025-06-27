@@ -4,6 +4,7 @@ import 'package:tiba_pay/models/user.dart';
 import 'package:tiba_pay/utils/database_helper.dart';
 import 'package:tiba_pay/screens/items/item_edit_screen.dart';
 import 'package:tiba_pay/repositories/item_repository.dart';
+import 'package:tiba_pay/services/excel_import_service.dart';
 
 class ItemListScreen extends StatefulWidget {
   final User currentUser;
@@ -28,11 +29,11 @@ class _ItemListScreenState extends State<ItemListScreen> {
   String? _sponsorFilter;
   bool? _activeFilter = true;
 
-  final List<String> _categories = ['DENTAL', 'OPTHAMOLOGY', 'ABS AND GYN', 'OPD', 'EMD', 'RADIOLOGY', 
-                                        'PSYCHIATRIC', 'INTERNAL MEDICINE', 'ORTHOPEDIC', 'DIALYSIS', 
-                                        'SURGICAL', 'ENT', 'DERMATOLOGY', 'PHYSIOTHERAPY', 'MALNUTRITION', 
-                                        'COMMUNITY PHARMACY', 'IPD PHARMACY', 'EMD PHARMACY', 'MORTUARY', 'OTHER'];
-  final List<String> _sponsors = ['CASH REFERRAL', 'CASH SELF REFERRAL', 'FIRST TRUCK'];
+  final List<String> _categories =  ['DENTAL', 'OPTHAMOLOGY', 'ABS AND GYN', 'OPD', 'EMD', 'RADIOLOGY', 'PROCEDURAL',
+                                   'PSYCHIATRIC', 'OPD', 'INTERNAL MEDICINE', 'ORTHOPEDIC', 'DIALYSIS', 'LABORATORY', 
+                                   'SURGICAL', 'ENT', 'DERMATOLOGY', 'PHARMACY', 'PHYSIOTHERAPY', 'MALNUTRITION', 
+                                   'CONSULTATION', 'EYE', 'LAUNDRY', 'MORTUARY', 'TAILORING', 'OTHER'];
+  final List<String> _sponsors = ['CASH REFERRAL', 'CASH SELF REFERRAL', 'FAST TRACK'];
 
   @override
   void initState() {
@@ -63,6 +64,77 @@ class _ItemListScreenState extends State<ItemListScreen> {
       );
     }
   }
+
+      Future<void> _importFromExcel() async {
+  try {
+    final items = await ExcelImportService.importItemsFromExcel(widget.currentUser);
+    
+    if (items == null || items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No items found in the Excel file')),
+      );
+      return;
+    }
+
+    // Check for duplicates in the database
+    // final existingItems = await _itemRepository.getAllItems();
+    // final duplicateNames = items.where((newItem) => 
+    //   existingItems.any((existing) => existing.itemName == newItem.itemName)
+    // ).toList();
+
+    // if (duplicateNames.isNotEmpty) {
+    //   final proceed = await showDialog<bool>(
+    //     context: context,
+    //     builder: (ctx) => AlertDialog(
+    //       title: const Text('Duplicate Items Found'),
+    //       content: Text('${duplicateNames.length} items already exist. Overwrite them?'),
+    //       actions: [
+    //         TextButton(
+    //           onPressed: () => Navigator.pop(ctx, false),
+    //           child: const Text('Cancel'),
+    //         ),
+    //         TextButton(
+    //           onPressed: () => Navigator.pop(ctx, true),
+    //           child: const Text('Overwrite'),
+    //         ),
+    //       ],
+    //     ),
+    //   );
+
+    //   if (proceed != true) return;
+    // }
+    
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm Import'),
+        content: Text('Found ${items.length} items. Import them?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirmed == true) {
+      await _itemRepository.insertItemsBatch(items);
+      _loadItems();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Successfully imported ${items.length} items')),
+      );
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to import items: $e')),
+    );
+  }
+}
 
   void _filterItems() {
     final query = _searchController.text.toLowerCase();
@@ -124,6 +196,79 @@ class _ItemListScreenState extends State<ItemListScreen> {
     );
   }
 
+  void _showFilterDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Filter Items'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<String>(
+              value: _categoryFilter,
+              decoration: const InputDecoration(labelText: 'Category'),
+              items: [null, ..._categories]
+                  .map((category) => DropdownMenuItem(
+                        value: category,
+                        child: Text(category ?? 'All Categories'),
+                      ))
+                  .toList(),
+              onChanged: (value) {
+                setState(() => _categoryFilter = value);
+                _filterItems();
+              },
+            ),
+            DropdownButtonFormField<String>(
+              value: _sponsorFilter,
+              decoration: const InputDecoration(labelText: 'Sponsor'),
+              items: [null, ..._sponsors]
+                  .map((sponsor) => DropdownMenuItem(
+                        value: sponsor,
+                        child: Text(sponsor ?? 'All Sponsors'),
+                      ))
+                  .toList(),
+              onChanged: (value) {
+                setState(() => _sponsorFilter = value);
+                _filterItems();
+              },
+            ),
+            DropdownButtonFormField<bool>(
+              value: _activeFilter,
+              decoration: const InputDecoration(labelText: 'Status'),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('All Statuses')),
+                const DropdownMenuItem(value: true, child: Text('Active')),
+                const DropdownMenuItem(value: false, child: Text('Inactive')),
+              ],
+              onChanged: (value) {
+                setState(() => _activeFilter = value);
+                _filterItems();
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _categoryFilter = null;
+                _sponsorFilter = null;
+                _activeFilter = true;
+              });
+              _filterItems();
+              Navigator.pop(ctx);
+            },
+            child: const Text('Reset'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final totalPages = (_filteredItems.length / _rowsPerPage).ceil();
@@ -170,38 +315,47 @@ class _ItemListScreenState extends State<ItemListScreen> {
           ),
           // CRUD Buttons
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Row(
-              children: [
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Item'),
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (ctx) => ItemEditScreen(currentUser: widget.currentUser),
-                    ),
-                  ).then((_) => _loadItems()),
-                ),
-                const SizedBox(width: 8),
-                DropdownButton<int>(
-                  value: _rowsPerPage,
-                  items: [10, 25, 50, 100]
-                      .map((value) => DropdownMenuItem(
-                            value: value,
-                            child: Text('$value items'),
-                          ))
-                      .toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _rowsPerPage = value!;
-                      _currentPage = 1;
-                    });
-                  },
-                ),
-              ],
+  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+  child: SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      children: [
+        ElevatedButton.icon(
+          icon: const Icon(Icons.add),
+          label: const Text('Add Item'),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (ctx) => ItemEditScreen(currentUser: widget.currentUser),
             ),
-          ),
+          ).then((_) => _loadItems()),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton.icon(
+          icon: const Icon(Icons.upload),
+          label: const Text('Import Excel'),
+          onPressed: _importFromExcel,
+        ),
+        const SizedBox(width: 8),
+        DropdownButton<int>(
+          value: _rowsPerPage,
+          items: [10, 25, 50, 100]
+              .map((value) => DropdownMenuItem(
+                    value: value,
+                    child: Text('$value items'),
+                  ))
+              .toList(),
+          onChanged: (value) {
+            setState(() {
+              _rowsPerPage = value!;
+              _currentPage = 1;
+            });
+          },
+        ),
+      ],
+    ),
+  ),
+),
           // Items Table
           Expanded(
             child: _isLoading
@@ -286,79 +440,6 @@ class _ItemListScreenState extends State<ItemListScreen> {
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showFilterDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Filter Items'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            DropdownButtonFormField<String>(
-              value: _categoryFilter,
-              decoration: const InputDecoration(labelText: 'Category'),
-              items: [null, ..._categories]
-                  .map((category) => DropdownMenuItem(
-                        value: category,
-                        child: Text(category ?? 'All Categories'),
-                      ))
-                  .toList(),
-              onChanged: (value) {
-                setState(() => _categoryFilter = value);
-                _filterItems();
-              },
-            ),
-            DropdownButtonFormField<String>(
-              value: _sponsorFilter,
-              decoration: const InputDecoration(labelText: 'Sponsor'),
-              items: [null, ..._sponsors]
-                  .map((sponsor) => DropdownMenuItem(
-                        value: sponsor,
-                        child: Text(sponsor ?? 'All Sponsors'),
-                      ))
-                  .toList(),
-              onChanged: (value) {
-                setState(() => _sponsorFilter = value);
-                _filterItems();
-              },
-            ),
-            DropdownButtonFormField<bool>(
-              value: _activeFilter,
-              decoration: const InputDecoration(labelText: 'Status'),
-              items: [
-                const DropdownMenuItem(value: null, child: Text('All Statuses')),
-                const DropdownMenuItem(value: true, child: Text('Active')),
-                const DropdownMenuItem(value: false, child: Text('Inactive')),
-              ],
-              onChanged: (value) {
-                setState(() => _activeFilter = value);
-                _filterItems();
-              },
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _categoryFilter = null;
-                _sponsorFilter = null;
-                _activeFilter = true;
-              });
-              _filterItems();
-              Navigator.pop(ctx);
-            },
-            child: const Text('Reset'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
           ),
         ],
       ),

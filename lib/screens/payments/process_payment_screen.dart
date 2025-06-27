@@ -8,6 +8,10 @@ import 'package:tiba_pay/repositories/item_repository.dart';
 import 'package:tiba_pay/repositories/patient_repository.dart';
 import 'package:tiba_pay/repositories/payment_repository.dart';
 import 'package:tiba_pay/utils/database_helper.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:flutter/services.dart' show rootBundle;
 
 class ProcessPaymentScreen extends StatefulWidget {
   final User user;
@@ -32,13 +36,14 @@ class _ProcessPaymentScreenState extends State<ProcessPaymentScreen> {
   String? _selectedCategory;
   Item? _selectedItem;
 
-  final List<String> _sponsors = ['CASH REFERRAL', 'CASH SELF REFERRAL', 'FIRST TRUCK'];
+  final List<String> _sponsors = ['CASH REFERRAL', 'CASH SELF REFERRAL', 'FAST TRACK'];
   List<String> _categories = [];
   List<Item> _filteredItems = [];
 
   int _rowsPerPage = 10;
   int _currentPage = 0;
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _itemSearchController = TextEditingController();
   String _searchType = 'Patient Number';
   final List<String> _searchTypes = [
     'Patient Number',
@@ -57,6 +62,7 @@ class _ProcessPaymentScreenState extends State<ProcessPaymentScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _itemSearchController.dispose();
     super.dispose();
   }
 
@@ -69,9 +75,9 @@ class _ProcessPaymentScreenState extends State<ProcessPaymentScreen> {
     }
 
     try {
-      // Create a separate payment for each item
       final paymentTime = DateTime.now();
       final basePaymentId = paymentTime.millisecondsSinceEpoch.toString();
+      final payments = <Payment>[];
       
       for (int i = 0; i < _selectedItems.length; i++) {
         final item = _selectedItems[i];
@@ -89,15 +95,17 @@ class _ProcessPaymentScreenState extends State<ProcessPaymentScreen> {
         );
 
         await _paymentRepository.createPayment(payment);
+        payments.add(payment);
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Payments processed successfully')),
       );
 
-      // Show success dialog with summary
-      final totalAmount = _selectedItems.fold(0.0, (sum, item) => sum + (item.amount * item.quantity));
-      await showDialog(
+      final totalAmount = _selectedItems.fold(
+        0.0, (sum, item) => sum + (item.amount * item.quantity));
+
+      final shouldPrint = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Payment Successful'),
@@ -113,31 +121,296 @@ class _ProcessPaymentScreenState extends State<ProcessPaymentScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Print Receipts'),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Done'),
             ),
             TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                setState(() {
-                  _selectedPatient = null;
-                  _selectedItems = [];
-                  _selectedSponsor = null;
-                  _selectedCategory = null;
-                  _selectedItem = null;
-                });
-              },
-              child: const Text('New Payment'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Print Receipt'),
             ),
           ],
         ),
-      );
+      ) ?? false;
+
+      if (shouldPrint) {
+        await _printReceipts(payments, totalAmount);
+      }
+
+      setState(() {
+        _selectedPatient = null;
+        _selectedItems = [];
+        _selectedSponsor = null;
+        _selectedCategory = null;
+        _selectedItem = null;
+        _itemSearchController.clear();
+      });
+
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error processing payments: ${e.toString()}')),
       );
     }
   }
+
+     Future<void> _printReceipts(List<Payment> payments, double totalAmount) async {
+  try {
+    final pdf = pw.Document();
+    final dateFormat = DateFormat('yyyy-MM-dd HH:mm:ss');
+    final currencyFormat = NumberFormat("#,##0.00", "en_US");
+
+    final leftLogo = pw.MemoryImage(
+      (await rootBundle.load('assets/icons/gvt_logo.jpg')).buffer.asUint8List(),
+    );
+    final rightLogo = pw.MemoryImage(
+      (await rootBundle.load('assets/icons/hospital_logo.png')).buffer.asUint8List(),
+    );
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.roll80,
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Container(
+                    height: 60,
+                    child: pw.Image(leftLogo, height: 60),
+                  ),
+                  pw.Container(
+                    height: 60,
+                    child: pw.Image(rightLogo, height: 60),
+                  ),
+                ],
+              ),
+              
+              pw.Column(
+                children: [
+                  pw.Text(
+                    'MOROGORO REGIONAL REFERRAL HOSPITAL',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                  pw.Text(
+                    'P.O BOX 110 MOROGORO TANZANIA',
+                    style: pw.TextStyle(fontSize: 10),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                  pw.Text(
+                    'Email: barua@morogororrh.go.tz',
+                    style: pw.TextStyle(fontSize: 10),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                  pw.Text(
+                    'Tel: +255 737 977 828',
+                    style: pw.TextStyle(fontSize: 10),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                ],
+              ),
+              
+              pw.Divider(thickness: 1),
+              pw.SizedBox(height: 10),
+              
+              pw.Center(
+                child: pw.Text(
+                  'PAYMENT RECEIPT',
+                  style: pw.TextStyle(
+                    fontSize: 14,
+                    fontWeight: pw.FontWeight.bold,
+                    decoration: pw.TextDecoration.underline,
+                  ),
+                ),
+              ),
+              
+              pw.SizedBox(height: 15),
+              
+              pw.Text('Patient: ${payments.first.patientName}', 
+                style: pw.TextStyle(fontSize: 12)),
+              pw.Text('Patient ID: ${payments.first.patientId}', 
+                style: pw.TextStyle(fontSize: 12)),
+              pw.Text('Date: ${dateFormat.format(payments.first.paymentDate)}', 
+                style: pw.TextStyle(fontSize: 12)),
+              pw.Text('Cashier: ${payments.first.createdBy}', 
+                style: pw.TextStyle(fontSize: 12)),
+              
+              pw.SizedBox(height: 15),
+              pw.Divider(thickness: 0.5),
+              pw.SizedBox(height: 10),
+              
+              pw.Table(
+                border: pw.TableBorder.all(width: 0.5),
+                columnWidths: {
+                  0: pw.FlexColumnWidth(2.5),
+                  1: pw.FlexColumnWidth(0.8),
+                  2: pw.FlexColumnWidth(1.5),
+                  3: pw.FlexColumnWidth(1.5),
+                },
+                children: [
+                  pw.TableRow(
+                    decoration: pw.BoxDecoration(color: PdfColors.grey200),
+                    children: [
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: pw.Text(
+                          'ITEM',
+                          style: pw.TextStyle(
+                            fontSize: 10,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: pw.Text(
+                          'QTY',
+                          style: pw.TextStyle(
+                            fontSize: 10,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                          textAlign: pw.TextAlign.center,
+                        ),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: pw.Text(
+                          'PRICE',
+                          style: pw.TextStyle(
+                            fontSize: 10,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                          textAlign: pw.TextAlign.right,
+                        ),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: pw.Text(
+                          'SUBTOTAL',
+                          style: pw.TextStyle(
+                            fontSize: 10,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                          textAlign: pw.TextAlign.right,
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  ...payments.map((payment) {
+                    final unitPrice = payment.item.amount / payment.item.quantity;
+                    final subtotal = payment.item.amount;
+                    
+                    return pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text(
+                            payment.item.itemName,
+                            style: const pw.TextStyle(fontSize: 10),
+                          ),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text(
+                            payment.item.quantity.toString(),
+                            style: const pw.TextStyle(fontSize: 10),
+                            textAlign: pw.TextAlign.center,
+                          ),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text(
+                            currencyFormat.format(unitPrice),
+                            style: const pw.TextStyle(fontSize: 10),
+                            textAlign: pw.TextAlign.right,
+                          ),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text(
+                            currencyFormat.format(subtotal),
+                            style: const pw.TextStyle(fontSize: 10),
+                            textAlign: pw.TextAlign.right,
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ],
+              ),
+              
+              pw.SizedBox(height: 10),
+              
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.end,
+                children: [
+                  pw.Container(
+                    width: 200,
+                    padding: const pw.EdgeInsets.all(4),
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border.all(width: 0.5),
+                    ),
+                    child: pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text(
+                          'TOTAL:',
+                          style: pw.TextStyle(
+                            fontSize: 12,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
+                        pw.Text(
+                          currencyFormat.format(totalAmount),
+                          style: pw.TextStyle(
+                            fontSize: 12,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              
+              pw.SizedBox(height: 20),
+              
+              pw.Center(
+                child: pw.Text(
+                  'Huduma Bora ni kipaumbele chetu',
+                  style: pw.TextStyle(
+                    fontSize: 12,
+                    fontStyle: pw.FontStyle.italic,
+                  ),
+                ),
+              ),
+              pw.SizedBox(height: 10),
+              pw.Center(
+                child: pw.Text(
+                  'Asante sana kwa kuja kuhudumiwa kwetu, karibu tena.',
+                  style: pw.TextStyle(fontSize: 10),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+    );
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to generate receipt: ${e.toString()}')),
+    );
+  }
+}
 
   void _addItemToPayment() {
     if (_selectedItem == null) return;
@@ -151,6 +424,7 @@ class _ProcessPaymentScreenState extends State<ProcessPaymentScreen> {
         quantity: 1,
       ));
       _selectedItem = null;
+      _itemSearchController.clear();
     });
   }
 
@@ -187,6 +461,7 @@ class _ProcessPaymentScreenState extends State<ProcessPaymentScreen> {
       body: _selectedPatient == null ? _buildPatientTable() : _buildPaymentForm(),
     );
   }
+
   Widget _buildPatientTable() {
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -205,10 +480,7 @@ class _ProcessPaymentScreenState extends State<ProcessPaymentScreen> {
                           items: _searchTypes.map((type) {
                             return DropdownMenuItem<String>(
                               value: type,
-                              child: Text(
-                                type,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                              child: Text(type, overflow: TextOverflow.ellipsis),
                             );
                           }).toList(),
                           onChanged: (value) => setState(() => _searchType = value!),
@@ -493,6 +765,7 @@ class _ProcessPaymentScreenState extends State<ProcessPaymentScreen> {
                       setState(() {
                         _selectedPatient = null;
                         _selectedItems = [];
+                        _itemSearchController.clear();
                       });
                     },
                     child: const Text('Change Patient'),
@@ -523,10 +796,7 @@ class _ProcessPaymentScreenState extends State<ProcessPaymentScreen> {
                     items: _sponsors.map((sponsor) {
                       return DropdownMenuItem<String>(
                         value: sponsor,
-                        child: Text(
-                          sponsor,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        child: Text(sponsor, overflow: TextOverflow.ellipsis),
                       );
                     }).toList(),
                     onChanged: (value) {
@@ -535,6 +805,7 @@ class _ProcessPaymentScreenState extends State<ProcessPaymentScreen> {
                         _selectedCategory = null;
                         _selectedItem = null;
                         _filteredItems = [];
+                        _itemSearchController.clear();
                       });
                       _itemsFuture.then((items) {
                         setState(() {
@@ -559,53 +830,88 @@ class _ProcessPaymentScreenState extends State<ProcessPaymentScreen> {
                       items: _categories.map((category) {
                         return DropdownMenuItem<String>(
                           value: category,
-                          child: Text(
-                            category,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          child: Text(category, overflow: TextOverflow.ellipsis),
                         );
                       }).toList(),
                       onChanged: (value) {
                         setState(() {
                           _selectedCategory = value;
                           _selectedItem = null;
+                          _itemSearchController.clear();
                         });
-                        _filterItems();
                       },
                     ),
                   const SizedBox(height: 16),
                   if (_selectedCategory != null)
-                    DropdownButtonFormField<Item>(
-                      value: _selectedItem,
-                      decoration: const InputDecoration(
-                        labelText: 'Select Item',
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12),
-                      ),
-                      isExpanded: true,
-                      items: _filteredItems.map((item) {
-                        return DropdownMenuItem<Item>(
-                          value: item,
-                          child: Text(
-                            '${item.itemName} - ${item.itemPrice}',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (item) => setState(() => _selectedItem = item),
-                    ),
-                  const SizedBox(height: 16),
-                  if (_selectedItem != null)
-                    Row(
+                    Column(
                       children: [
-                        Expanded(
-                          child: Text(
-                            'Price: ${_selectedItem!.itemPrice}',
-                            style: const TextStyle(fontSize: 16),
+                        TextField(
+                          controller: _itemSearchController,
+                          decoration: InputDecoration(
+                            labelText: 'Search Item',
+                            prefixIcon: Icon(Icons.search),
+                            border: OutlineInputBorder(),
                           ),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedItem = null;
+                            });
+                          },
                         ),
-                        ElevatedButton(
-                          onPressed: _addItemToPayment,
-                          child: const Text('Add Item'),
+                        SizedBox(height: 10),
+                        FutureBuilder<List<Item>>(
+                          future: _itemsFuture,
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return Center(child: CircularProgressIndicator());
+                            }
+                            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                              return Text('No items found');
+                            }
+
+                            final allItems = snapshot.data!;
+                            final filteredItems = allItems.where((item) =>
+                                item.itemSponsor == _selectedSponsor &&
+                                item.itemCategory == _selectedCategory &&
+                                (_itemSearchController.text.isEmpty ||
+                                    item.itemName.toLowerCase().contains(
+                                        _itemSearchController.text.toLowerCase())));
+
+                            return Container(
+                              height: 200,
+                              child: ListView.builder(
+                                itemCount: filteredItems.length,
+                                itemBuilder: (context, index) {
+                                  final item = filteredItems.elementAt(index);
+                                  return ListTile(
+                                    title: Text(item.itemName),
+                                    subtitle: Text('Price: ${item.itemPrice}'),
+                                    onTap: () {
+                                      setState(() {
+                                        _selectedItem = item;
+                                      });
+                                    },
+                                    tileColor: _selectedItem?.itemId == item.itemId
+                                        ? Colors.blue[50]
+                                        : null,
+                                  );
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  if (_selectedItem != null)
+                    Column(
+                      children: [
+                        ListTile(
+                          title: Text(_selectedItem!.itemName),
+                          subtitle: Text('Price: ${_selectedItem!.itemPrice}'),
+                          trailing: ElevatedButton(
+                            onPressed: _addItemToPayment,
+                            child: const Text('Add Item'),
+                          ),
                         ),
                       ],
                     ),
